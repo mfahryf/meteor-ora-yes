@@ -14,9 +14,9 @@ An autonomous DLMM liquidity management agent powered by LLM-based decision maki
 ### Key Features
 
 - **ReAct Agent Loop** — Reason + Act pattern with parallel tool execution
-- **Role-Based Agents** — SCREENER (deploy), MANAGER (monitor), EVOLVER (learn)
+- **Role-Based Agents** — SCREENER (deploy), MANAGER (monitor), EVOLVER (learn), CHAT (conversational)
 - **Dual Memory** — SQLite for structured data, Qdrant for semantic recall
-- **Telegram Control** — Commands + interactive approvals for risky actions
+- **Telegram Chat** — Natural language conversation + commands + interactive approvals
 - **Self-Evolution** — Agent tunes its own config based on performance
 
 ---
@@ -55,7 +55,8 @@ dlmm/
 │   │   └── prompts/
 │   │       ├── screener.ts          # 10-step screening instructions
 │   │       ├── manager.ts           # Position management rules
-│   │       └── evolver.ts           # Evolution analysis prompt
+│   │       ├── evolver.ts           # Evolution analysis prompt
+│   │       └── chat.ts              # Conversational prompt
 │   ├── memory/
 │   │   ├── sqlite.ts                # Trade log, PnL, config history
 │   │   ├── qdrant.ts                # Vector client + collections
@@ -68,6 +69,8 @@ dlmm/
 │   ├── telegram/
 │   │   ├── bot.ts                   # Grammy bot init
 │   │   ├── commands.ts              # /status /pause /resume /config etc
+│   │   ├── chat.ts                  # Natural language chat handler
+│   │   ├── session.ts               # Conversation session management
 │   │   ├── approvals.ts             # Inline keyboard approval flow
 │   │   └── notify.ts                # Alert formatting
 │   └── utils/
@@ -111,7 +114,7 @@ index.ts
     ├─► Init Helius RPC connection
     ├─► Init SQLite database (create tables if needed)
     ├─► Init Qdrant client (ensure collections exist)
-    ├─► Init Telegram bot (register commands)
+    ├─► Init Telegram bot (register commands + chat handler)
     │
     └─► Start Scheduler
             │
@@ -124,7 +127,7 @@ index.ts
 ### Agent Loop (ReAct Pattern)
 
 ```
-agentLoop(goal, role, maxSteps)
+agentLoop(goal, role, maxSteps, sessionHistory = [])
     │
     ├─► FETCH LIVE STATE (parallel)
     │       ├─ getWalletBalances()
@@ -265,6 +268,123 @@ Side effects:
    └─ REJECT → save rejection reason as lesson
 ```
 
+### CHAT (On-demand via Telegram)
+
+**Goal:** Natural language conversation with the agent — ask questions, give instructions, request actions
+
+**Tools Available:** ALL tools (full access)
+
+**Session Management:**
+
+```
+Telegram Message (non-command)
+    │
+    ├─► Check if user is authorized (chat_id whitelist)
+    │
+    ├─► Load or create session
+    │       ├─ session_id: telegram_chat_id
+    │       ├─ message_history: last N messages (configurable, default 20)
+    │       ├─ created_at, last_activity
+    │       └─ context: { pending_action, referenced_position, etc }
+    │
+    ├─► Append user message to history
+    │
+    ├─► agentLoop(userMessage, "CHAT", maxSteps, sessionHistory)
+    │       │
+    │       ├─ Full context injected (wallet, positions, lessons, config)
+    │       ├─ All tools available
+    │       └─ Can execute actions or just answer questions
+    │
+    ├─► Append assistant response to history
+    │
+    └─► Send response to Telegram
+            ├─ Text message (markdown formatted)
+            ├─ If action was taken → include action summary
+            └─ If approval needed → inline keyboard
+```
+
+**Chat Capabilities:**
+
+| User says... | Agent does... |
+|--------------|---------------|
+| "What's my PnL?" | Calls `get_my_positions` + `get_position_pnl`, summarizes |
+| "How much SOL do I have?" | Calls `get_wallet_balance`, reports |
+| "Why did you skip BONK pool?" | Queries memory, explains screening decision |
+| "Close the TRUMP position" | Calls `close_position` after confirmation |
+| "What did you learn this week?" | Queries lessons from Qdrant, summarizes |
+| "Pause for 2 hours" | Calls `update_config`, schedules auto-resume |
+| "Scan for new pools now" | Triggers immediate SCREENER cycle |
+| "Show me the top pools right now" | Calls `get_top_candidates`, formats list |
+| "Is WIF token safe?" | Calls `get_token_info` + `get_token_holders`, analyzes |
+| "Add BONK to blacklist" | Calls `add_to_blacklist`, confirms |
+| "What's your strategy for volatile tokens?" | Explains from config + lessons |
+
+**Context Awareness:**
+
+The chat agent has full context and can reference:
+- Current wallet state
+- Open positions with PnL
+- Recent screening/management decisions
+- Lessons learned
+- Config history and reasons for changes
+
+**Example Conversation:**
+
+```
+USER:  why did you close my BONK position earlier?
+
+AGENT: I closed your BONK/SOL position at 14:32 UTC because:
+
+       1. The position had been out-of-range (OOR) for 23 minutes
+          (threshold: 20 minutes)
+       2. PnL was +8.2% at time of close
+       3. Pool volume had dropped 60% in the last hour
+
+       Final return: +0.032 SOL ($5.12)
+       Tx: 7xK2m... [link]
+
+USER:  ok good call. can you watch for BONK again if volume picks up?
+
+AGENT: Got it. I've added a note to prioritize BONK/SOL in the next
+       screening cycle if:
+       - 24h volume > $50K
+       - TVL remains > $30K
+
+       I'll notify you if I deploy there again.
+
+USER:  thanks. what's my total PnL this week?
+
+AGENT: Your performance summary (last 7 days):
+
+       | Metric         | Value          |
+       |----------------|----------------|
+       | Total Trades   | 12 (8 wins)    |
+       | Total PnL      | +0.87 SOL      |
+       | Win Rate       | 66.7%          |
+       | Avg Hold Time  | 4.2 hours      |
+       | Best Trade     | WIF/SOL +18%   |
+       | Worst Trade    | PEPE/SOL -6%   |
+
+       Net profit: +$139.20 USD
+```
+
+**Session Storage (SQLite):**
+
+```sql
+CREATE TABLE chat_sessions (
+    session_id TEXT PRIMARY KEY,  -- telegram chat_id
+    message_history TEXT,          -- JSON array of messages
+    context TEXT,                  -- JSON object for ad-hoc context
+    created_at DATETIME,
+    last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index for cleanup of old sessions
+CREATE INDEX idx_chat_sessions_last_activity ON chat_sessions(last_activity);
+```
+
+**Session Cleanup:** Sessions inactive for > 24h are archived to Qdrant for future reference, then cleared from SQLite.
+
 ---
 
 ## Section 4: Memory Architecture
@@ -336,6 +456,15 @@ CREATE TABLE agent_runs (
     duration_ms INTEGER,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Chat sessions
+CREATE TABLE chat_sessions (
+    session_id TEXT PRIMARY KEY,
+    message_history TEXT,
+    context TEXT,
+    created_at DATETIME,
+    last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
 ### Qdrant (Vector Memory)
@@ -345,8 +474,9 @@ CREATE TABLE agent_runs (
 | Collection | Purpose | Vector Content |
 |------------|---------|----------------|
 | `pool_outcomes` | Pool profile → result mapping | Token metadata + pool metrics + outcome |
-| `lessons` | Persistent lessons by role | Lesson text + tags (SCREENER/MANAGER/EVOLVER) |
+| `lessons` | Persistent lessons by role | Lesson text + tags (SCREENER/MANAGER/EVOLVER/CHAT) |
 | `strategy_outcomes` | Strategy config + market → performance | Strategy params + market conditions |
+| `chat_archives` | Archived chat sessions | Conversation summary + context |
 
 **Usage:**
 
@@ -473,11 +603,39 @@ async function runSafetyChecks(toolName: string, args: any): Promise<SafetyResul
 
 ## Section 6: Telegram Integration
 
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     TELEGRAM BOT LAYER                          │
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │  Commands    │  │    Chat      │  │  Approvals   │         │
+│  │  (/status)   │  │  (natural    │  │  (inline     │         │
+│  │              │  │   language)  │  │   keyboard)  │         │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘         │
+│         │                 │                 │                  │
+│         └─────────────────┼─────────────────┘                  │
+│                           │                                    │
+│                    ┌──────▼──────┐                             │
+│                    │   Session   │                             │
+│                    │   Manager   │                             │
+│                    │  (SQLite)   │                             │
+│                    └──────┬──────┘                             │
+│                           │                                    │
+└───────────────────────────┼────────────────────────────────────┘
+                            │
+                     ┌──────▼──────┐
+                     │  Agent Loop │
+                     │  (CHAT role)│
+                     └─────────────┘
+```
+
 ### Commands
 
 | Command | Description |
 |---------|-------------|
-| `/start` | Initialize bot, show welcome |
+| `/start` | Initialize bot, show welcome + capabilities |
 | `/status` | Show positions, PnL, wallet balance |
 | `/pause` | Pause all agent cycles |
 | `/resume` | Resume agent cycles |
@@ -487,6 +645,62 @@ async function runSafetyChecks(toolName: string, args: any): Promise<SafetyResul
 | `/config get <key>` | Show current config value |
 | `/lessons` | List recent lessons |
 | `/blacklist <token>` | Add token to blacklist |
+| `/clear` | Clear chat history / start fresh conversation |
+| `/help` | Show available commands + chat examples |
+
+### Natural Language Chat
+
+**How it works:**
+
+1. Any non-command message is treated as a chat message
+2. Message is passed to the CHAT agent with full context
+3. Agent can:
+   - Answer questions (read-only)
+   - Execute actions (with approval for risky operations)
+   - Remember conversation context for follow-up questions
+
+**Example interactions:**
+
+```
+USER:  what's my portfolio looking like?
+
+BOT:  📊 Portfolio Summary
+
+      💰 Wallet Balance: 2.45 SOL ($392)
+
+      📈 Open Positions (2):
+      ├─ BONK/SOL
+      │  Amount: 0.4 SOL | PnL: +12.3% | Fees: 0.02 SOL
+      │  Status: In-range | Strategy: bid_ask
+      │
+      └─ WIF/SOL
+         Amount: 0.3 SOL | PnL: -2.1% | Fees:  0.01 SOL
+         Status: OOR (5 min) | Strategy: spot
+
+      Total PnL: +$18.40
+
+USER:  close the WIF one, it's been out of range for a while
+
+BOT:  ⚠️ Confirm Close Position
+
+      Pool: WIF/SOL
+      PnL: -2.1% (-$6.72)
+      Fees earned: 0.01 SOL ($1.60)
+      Net result: -$5.12
+
+      [✅ Confirm] [❌ Cancel]
+
+USER:  [✅ Confirm]
+
+BOT:  ✅ Position closed
+
+      Withdrawn: 0.29 SOL + 1,234 WIF
+      Fees claimed: 0.01 SOL
+      Tx: 7xK2m... [view]
+
+      WIF has been swapped to 0.012 SOL
+      New balance: 2.47 SOL
+```
 
 ### Interactive Approvals
 
@@ -494,6 +708,16 @@ async function runSafetyChecks(toolName: string, args: any): Promise<SafetyResul
 - EVOLVER proposes config changes
 - High-risk deploy (new token, low mcap, high volatility)
 - `/exit-all` command
+- Chat-initiated close/deploy actions
+
+**Approval Types:**
+
+| Type | Timeout | Auto-action |
+|------|---------|-------------|
+| Config change (EVOLVER) | 10 min | Reject if no response |
+| Single position close | 3 min | Execute if no response |
+| Deploy to new pool | 5 min | Reject if no response |
+| Exit-all positions | 5 min | Reject if no response |
 
 **Flow:**
 
@@ -504,15 +728,41 @@ BOT: "EVOLVER proposes:
       Reasoning: Analysis of last 50 positions shows
       pools under $20K TVL had 3x higher rug rate.
 
-      [✅ Approve] [❌ Reject]"
+      [✅ Approve] [❌ Reject] [🔄 Defer 1h]"
 
 USER: [✅ Approve]
 
-BOT: "Applied. Saved as lesson:
+BOT: "✅ Applied. Saved as lesson:
       'Raising minTvl to $20K reduces rug risk'"
 ```
 
-**Auto-execute timeout:** 3 minutes (configurable)
+### Session Management
+
+```typescript
+interface ChatSession {
+  sessionId: string;        // telegram chat_id
+  messageHistory: Message[]; // last N messages (default 20)
+  context: {
+    pendingAction?: Action;
+    referencedPosition?: string;
+    userPreferences?: Record<string, any>;
+  };
+  createdAt: Date;
+  lastActivity: Date;
+}
+
+// Session operations
+- loadSession(chatId): ChatSession
+- saveSession(session): void
+- clearSession(chatId): void
+- archiveSession(chatId): void  // to Qdrant for long-term memory
+```
+
+### Rate Limiting
+
+- Max 1 message per 2 seconds per user
+- Max 100 messages per hour per user
+- Commands bypass rate limit
 
 ---
 
@@ -539,6 +789,7 @@ const ConfigSchema = z.object({
         managementModel: z.string(),
         screeningModel: z.string(),
         generalModel: z.string(),
+        chatModel: z.string(),      // Model for chat role
         temperature: z.number().min(0).max(2),
         maxTokens: z.number().positive(),
         maxSteps: z.number().positive(),
@@ -584,6 +835,14 @@ const ConfigSchema = z.object({
         minVolumeToRebalance: z.number().positive(),
         minFeePerTvl24h: z.number().positive(),
         autoSwapAfterClaim: z.boolean(),
+    }),
+
+    telegram: z.object({
+        authorizedChatIds: z.array(z.string()),  // Whitelist of allowed chat IDs
+        chatHistoryLimit: z.number().int().positive().default(20),
+        approvalTimeoutMs: z.number().positive().default(300000),  // 5 min
+        rateLimitPerSecond: z.number().positive().default(0.5),
+        rateLimitPerHour: z.number().int().positive().default(100),
     }),
 
     schedule: z.object({
@@ -646,7 +905,9 @@ export type Config = z.infer<typeof ConfigSchema>;
 
 ### Phase 7: Telegram
 - [ ] Grammy bot setup
-- [ ] Commands
+- [ ] Commands handler
+- [ ] Chat handler (natural language)
+- [ ] Session management
 - [ ] Approvals flow
 - [ ] Notifications
 
