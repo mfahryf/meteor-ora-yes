@@ -8,7 +8,10 @@ export const ConfigSchema = z.object({
     walletKey: z.string(),
     heliusApiKey: z.string(),
     telegramBotToken: z.string(),
-    telegramChatId: z.string(),
+    jupiterApiKey: z.string().optional(),
+    lpagentApiKey: z.string().optional(),
+    jupiterDatapiKey: z.string().optional(),
+    birdeyeApiKey: z.string().optional(),
   }),
   llm: z.object({
     baseUrl: z.string().url(),
@@ -64,9 +67,6 @@ export const ConfigSchema = z.object({
   telegram: z.object({
     authorizedChatIds: z.array(z.string()),
     chatHistoryLimit: z.number().int().positive().default(20),
-    approvalTimeoutMs: z.number().positive().default(300000),
-    rateLimitPerSecond: z.number().positive().default(0.5),
-    rateLimitPerHour: z.number().int().positive().default(100),
   }),
   schedule: z.object({
     managementIntervalMin: z.number().positive(),
@@ -76,7 +76,6 @@ export const ConfigSchema = z.object({
   }),
   runtime: z.object({
     dryRun: z.boolean(),
-    logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error']),
   }),
   _lastEvolved: z.string().optional(),
   _lastAgentTune: z.string().optional(),

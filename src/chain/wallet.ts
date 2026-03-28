@@ -18,3 +18,7 @@ export function getWallet(): Keypair {
     }
     return wallet;
 }
+
+export function resetWallet(): void {
+    wallet = null;
+}

@@ -1,0 +1,197 @@
+// src/core/agent.ts
+import { getLLMClient } from "../brain/llm";
+import { parseDecision } from "../brain/decision";
+import { buildSystemPrompt, buildToolSchemas, type Role } from "../brain/prompt";
+import { executeTool } from "../tools/registry";
+import { runSafetyChecks } from "../tools/safety";
+import { buildContext } from "../memory/recall";
+import { insertAgentRun } from "../memory/runs";
+import { logger } from "../utils/logger";
+import type { Config } from "../config/schema";
+
+export interface AgentLoopResult {
+    content: string;
+    userMessage: string;
+    toolsCalled: string[];
+    success: boolean;
+    durationMs: number;
+}
+
+export interface AgentDependencies {
+    walletSolBalance: number;
+    walletTokenBalances: Record<string, number>;
+    lessonVector?: number[];
+}
+
+export async function agentLoop(
+    goal: string,
+    role: Role,
+    config: Config,
+    deps: AgentDependencies,
+    maxSteps?: number,
+    sessionHistory: any[] = []
+): Promise<AgentLoopResult> {
+    const startTime = Date.now();
+    const effectiveMaxSteps = maxSteps || config.llm.maxSteps;
+    const toolsCalled: string[] = [];
+
+    // 1. Build context from SQLite + Qdrant
+    const context = await buildContext(
+        role,
+        deps.walletSolBalance,
+        deps.walletTokenBalances,
+        deps.lessonVector
+    );
+
+    // 2. Build system prompt + tool schemas
+    const systemPrompt = buildSystemPrompt(role, context, config);
+    const toolSchemas = buildToolSchemas(role);
+
+    // 3. Initialize messages
+    const messages: any[] = [
+        { role: "system", content: systemPrompt },
+        ...sessionHistory,
+        { role: "user", content: goal },
+    ];
+
+    // 4. Get LLM client
+    const client = getLLMClient(config.llm.baseUrl, config.llm.apiKey);
+    const model = getModelForRole(role, config);
+
+    // 5. ReAct loop
+    for (let step = 0; step < effectiveMaxSteps; step++) {
+        logger.info({ role, step, maxSteps: effectiveMaxSteps }, "Agent loop step");
+
+        try {
+            const response = await client.chat.completions.create({
+                model,
+                messages,
+                tools: toolSchemas.length > 0 ? toolSchemas : undefined,
+                temperature: config.llm.temperature,
+                max_tokens: config.llm.maxTokens,
+            });
+
+            const responseMessage = response.choices[0]?.message;
+            if (!responseMessage) {
+                throw new Error("Empty response from LLM");
+            }
+
+            const decision = parseDecision(responseMessage);
+            messages.push(responseMessage);
+
+            if (!decision.hasToolCalls) {
+                // Final answer reached
+                const durationMs = Date.now() - startTime;
+                const result: AgentLoopResult = {
+                    content: decision.finalAnswer || "",
+                    userMessage: goal,
+                    toolsCalled,
+                    success: true,
+                    durationMs,
+                };
+
+                insertAgentRun({
+                    agent_type: role,
+                    goal,
+                    tools_called: JSON.stringify(toolsCalled),
+                    final_answer: decision.finalAnswer || "",
+                    success: true,
+                    duration_ms: durationMs,
+                });
+
+                logger.info({ role, steps: step + 1, toolsCalled: toolsCalled.length, durationMs }, "Agent loop completed");
+                return result;
+            }
+
+            // Execute tool calls in parallel
+            const toolResults = await Promise.all(
+                decision.actions.map(async (action) => {
+                    toolsCalled.push(action.name);
+                    logger.info({ tool: action.name, args: action.arguments }, "Executing tool");
+
+                    // Safety check for WRITE tools
+                    if (action.name === "deploy_position") {
+                        const safetyResult = await runSafetyChecks(
+                            action.name,
+                            action.arguments,
+                            config,
+                            deps.walletSolBalance
+                        );
+                        if (safetyResult.blocked) {
+                            logger.warn({ tool: action.name, reason: safetyResult.reason }, "Safety check blocked");
+                            return {
+                                tool_call_id: action.id,
+                                role: "tool" as const,
+                                content: JSON.stringify({ error: safetyResult.reason, blocked: true }),
+                            };
+                        }
+                    }
+
+                    const result = await executeTool(action.name, action.arguments);
+                    return {
+                        tool_call_id: action.id,
+                        role: "tool" as const,
+                        content: typeof result === "string" ? result : JSON.stringify(result),
+                    };
+                })
+            );
+
+            for (const result of toolResults) {
+                messages.push(result);
+            }
+
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            logger.error({ role, step, error: msg }, "Agent loop error");
+
+            const durationMs = Date.now() - startTime;
+            insertAgentRun({
+                agent_type: role,
+                goal,
+                tools_called: JSON.stringify(toolsCalled),
+                final_answer: `Error: ${msg}`,
+                success: false,
+                duration_ms: durationMs,
+            });
+
+            return {
+                content: `Agent error: ${msg}`,
+                userMessage: goal,
+                toolsCalled,
+                success: false,
+                durationMs,
+            };
+        }
+    }
+
+    // Max steps reached without final answer
+    const durationMs = Date.now() - startTime;
+    logger.warn({ role, maxSteps: effectiveMaxSteps }, "Agent loop hit max steps");
+
+    insertAgentRun({
+        agent_type: role,
+        goal,
+        tools_called: JSON.stringify(toolsCalled),
+        final_answer: "Max steps reached without final answer",
+        success: false,
+        duration_ms: durationMs,
+    });
+
+    return {
+        content: "I reached my maximum number of reasoning steps. Please try again with a simpler query.",
+        userMessage: goal,
+        toolsCalled,
+        success: false,
+        durationMs,
+    };
+}
+
+function getModelForRole(role: Role, config: Config): string {
+    switch (role) {
+        case "SCREENER": return config.llm.screeningModel;
+        case "MANAGER": return config.llm.managementModel;
+        case "EVOLVER": return config.llm.generalModel;
+        case "CHAT": return config.llm.chatModel;
+        default: return config.llm.model;
+    }
+}

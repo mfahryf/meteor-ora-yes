@@ -1,3 +1,4 @@
+// src/memory/qdrant.ts
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 let client: QdrantClient | null = null;
@@ -10,4 +11,8 @@ export function getQdrantClient(): QdrantClient {
         });
     }
     return client;
+}
+
+export function resetQdrantClient(): void {
+    client = null;
 }

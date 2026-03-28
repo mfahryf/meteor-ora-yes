@@ -1,5 +1,5 @@
 // src/memory/positions.ts
-import { db } from "./sqlite";
+import { getDb } from "./sqlite";
 
 export interface PositionRecord {
     position_pubkey: string;
@@ -14,6 +14,7 @@ export interface PositionRecord {
 }
 
 export function insertPosition(pos: PositionRecord) {
+    const db = getDb();
     const stmt = db.prepare(`
         INSERT INTO positions (
             position_pubkey, pool_address, strategy_type, bin_step,
@@ -35,6 +36,13 @@ export function insertPosition(pos: PositionRecord) {
 }
 
 export function getOpenPositions(): PositionRecord[] {
+    const db = getDb();
     const stmt = db.prepare(`SELECT * FROM positions WHERE status = 'open'`);
     return stmt.all() as PositionRecord[];
+}
+
+export function updatePositionStatus(positionPubkey: string, status: string): void {
+    const db = getDb();
+    const stmt = db.prepare(`UPDATE positions SET status = $status, closed_at = CURRENT_TIMESTAMP WHERE position_pubkey = $pubkey`);
+    stmt.run({ $status: status, $pubkey: positionPubkey });
 }

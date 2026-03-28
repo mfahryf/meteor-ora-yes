@@ -1,6 +1,6 @@
 // src/memory/positions.test.ts
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { initDb, db } from "./sqlite";
+import { initDb, closeDb, getDb } from "./sqlite";
 import { insertPosition, getOpenPositions } from "./positions";
 
 beforeAll(() => {
@@ -8,10 +8,10 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-    db.close();
+    closeDb();
 });
 
-test("can insert and retrieve a position", () => {
+test("can insert and retrieve an open position", () => {
     insertPosition({
         position_pubkey: "mock_pubkey_1",
         pool_address: "mock_pool",
@@ -28,4 +28,12 @@ test("can insert and retrieve a position", () => {
     expect(open.length).toBe(1);
     expect(open[0].position_pubkey).toBe("mock_pubkey_1");
     expect(open[0].status).toBe("open");
+});
+
+test("does not return closed positions", () => {
+    const db = getDb();
+    db.exec(`UPDATE positions SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE position_pubkey = 'mock_pubkey_1'`);
+
+    const open = getOpenPositions();
+    expect(open.length).toBe(0);
 });
