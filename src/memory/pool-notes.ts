@@ -30,3 +30,24 @@ export function getPoolNotes(poolAddress: string, limit: number = 20): PoolNote[
         createdAt: row.created_at,
     }));
 }
+
+/**
+ * Get the most recent instruction note for a position (set via /set command).
+ * Instructions are prefixed with [INSTRUCTION].
+ */
+export function getPoolInstruction(poolAddress: string): string | null {
+    const db = getDb();
+    const row = db.prepare(
+        `SELECT note FROM pool_notes WHERE pool_address = $pool AND note LIKE '[INSTRUCTION]%' ORDER BY created_at DESC LIMIT 1`
+    ).get({ $pool: poolAddress }) as { note: string } | null;
+    return row?.note?.replace("[INSTRUCTION] ", "") ?? null;
+}
+
+/**
+ * Clear all notes for a pool (called when position is closed).
+ */
+export function clearPoolNotes(poolAddress: string): number {
+    const db = getDb();
+    const result = db.prepare(`DELETE FROM pool_notes WHERE pool_address = $pool`).run({ $pool: poolAddress });
+    return result.changes;
+}
