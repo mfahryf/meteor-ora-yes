@@ -20,13 +20,16 @@ async function main() {
     const intervalMinutes = parseInt(getArg("interval", "5"));
     const initialBalance = parseFloat(getArg("balance", "1.0"));
 
+    const isInfinite = totalCycles === 0;
+    const cycleDisplay = isInfinite ? "∞" : String(totalCycles).padEnd(4);
+
     console.log(`
 ╔══════════════════════════════════════════════════════╗
 ║           🔮 SHADOW TRADING SIMULATOR                ║
 ║                                                      ║
 ║  Real market data → Virtual SOL → Real learnings     ║
 ╠══════════════════════════════════════════════════════╣
-║  Cycles: ${String(totalCycles).padEnd(4)} │ Interval: ${String(intervalMinutes).padEnd(3)}min │ Balance: ${initialBalance} SOL  ║
+║  Cycles: ${cycleDisplay} │ Interval: ${String(intervalMinutes).padEnd(3)}min │ Balance: ${initialBalance} SOL  ║
 ╚══════════════════════════════════════════════════════╝
 `);
 
@@ -44,35 +47,50 @@ async function main() {
     console.log(`📊 Portfolio: ${portfolio.name}`);
     console.log(`💰 Starting balance: ${portfolio.current_balance_sol.toFixed(4)} SOL`);
     console.log(`📈 Open positions: ${portfolio.positions_opened - portfolio.positions_closed}`);
-    console.log(`\n--- Starting simulation ---\n`);
+    console.log(`\n--- Starting simulation (Press Ctrl+C to stop) ---\n`);
 
     // Run cycles
-    for (let cycle = 1; cycle <= totalCycles; cycle++) {
-        console.log(`\n━━━ Cycle ${cycle}/${totalCycles} ━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    let cycle = 1;
+    while (isInfinite || cycle <= totalCycles) {
+        process.stdout.write(`\n━━━ Cycle ${cycle}${isInfinite ? "" : `/${totalCycles}`} ━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
 
         try {
             const result = await runSimulationCycle(config, cycle);
 
             // Print cycle summary
-            console.log(`  Screened: ${result.screened} pools`);
-            console.log(`  Deployed: ${result.deployed} shadow positions`);
-            console.log(`  Monitored: ${result.monitored} positions`);
-            console.log(`  Closed: ${result.closed} positions`);
+            console.log(`  Screened: ${result.screened} pools | Deployed: ${result.deployed} | Monitored: ${result.monitored} | Closed: ${result.closed}`);
             console.log(`  Balance: ${result.portfolioBalance.toFixed(4)} SOL (${result.portfolioPnlPct >= 0 ? "+" : ""}${result.portfolioPnlPct.toFixed(1)}%)`);
 
             if (result.errors.length > 0) {
                 console.log(`  ⚠️ Errors: ${result.errors.length}`);
                 result.errors.forEach(e => console.log(`    - ${e}`));
             }
+
+            // --- Tampilkan Status Posisi Aktif ---
+            const { getOpenShadowPositions } = await import("./shadow-portfolio");
+            const openPos = getOpenShadowPositions(portfolio.id);
+            if (openPos.length > 0) {
+                console.log(`\n  📡 Status Posisi Aktif (${openPos.length}/${config.risk.maxPositions}):`);
+                openPos.forEach((p, i) => {
+                    const sign = p.unrealized_pnl_pct >= 0 ? "+" : "";
+                    const feeStr = p.accumulated_fees_sol > 0 ? ` | Fees: +${p.accumulated_fees_sol.toFixed(4)}` : "";
+                    console.log(`    ${i + 1}. ${p.token_a_symbol}/${p.token_b_symbol}  [${p.duration_minutes.toFixed(0)} menit]`);
+                    console.log(`       PnL: ${sign}${p.unrealized_pnl_pct.toFixed(2)}% (${sign}${p.unrealized_pnl_sol.toFixed(4)} SOL)${feeStr}`);
+                });
+            } else {
+                console.log(`\n  📭 Tidak ada posisi yang aktif saat ini.`);
+            }
+
         } catch (error) {
             console.error(`  ❌ Cycle failed: ${error}`);
         }
 
-        // Wait between cycles (unless last)
-        if (cycle < totalCycles) {
+        // Wait between cycles (unless last of finite run)
+        if (isInfinite || cycle < totalCycles) {
             console.log(`\n  ⏳ Next cycle in ${intervalMinutes}min...`);
             await new Promise(resolve => setTimeout(resolve, intervalMinutes * 60 * 1000));
         }
+        cycle++;
     }
 
     // Final report
