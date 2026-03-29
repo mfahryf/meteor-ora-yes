@@ -151,6 +151,65 @@ export function initDb(path: string = "data/dlmm.db"): Database {
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_config_log_key ON config_change_log(key);
+    CREATE TABLE IF NOT EXISTS shadow_portfolios (
+        id INTEGER PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        initial_balance_sol REAL NOT NULL,
+        current_balance_sol REAL NOT NULL,
+        total_deployed_sol REAL DEFAULT 0,
+        total_returned_sol REAL DEFAULT 0,
+        total_fees_earned_sol REAL DEFAULT 0,
+        total_pnl_sol REAL DEFAULT 0,
+        total_pnl_pct REAL DEFAULT 0,
+        positions_opened INTEGER DEFAULT 0,
+        positions_closed INTEGER DEFAULT 0,
+        win_count INTEGER DEFAULT 0,
+        loss_count INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS shadow_positions (
+        id INTEGER PRIMARY KEY,
+        portfolio_id INTEGER,
+        pool_address TEXT,
+        token_a_symbol TEXT,
+        token_b_symbol TEXT,
+        token_a_mint TEXT,
+        strategy_type TEXT,
+        bin_step INTEGER,
+        bins_below INTEGER,
+        bins_above INTEGER,
+        entry_price REAL,
+        entry_amount_sol REAL,
+        entry_tvl REAL,
+        entry_volume_24h REAL,
+        entry_fee_apr REAL,
+        entry_timestamp DATETIME,
+        current_price REAL,
+        price_change_pct REAL DEFAULT 0,
+        accumulated_fees_sol REAL DEFAULT 0,
+        unrealized_pnl_sol REAL DEFAULT 0,
+        unrealized_pnl_pct REAL DEFAULT 0,
+        duration_minutes REAL DEFAULT 0,
+        last_checked DATETIME,
+        exit_price REAL,
+        exit_amount_sol REAL,
+        exit_reason TEXT,
+        exit_timestamp DATETIME,
+        final_pnl_sol REAL,
+        final_pnl_pct REAL,
+        status TEXT DEFAULT 'open',
+        dex_buy_sell_ratio REAL,
+        dex_price_change_1h REAL,
+        dex_pair_age_hours REAL,
+        dex_liquidity_usd REAL,
+        debate_bull_score REAL,
+        debate_bear_score REAL,
+        debate_arbiter_score REAL,
+        FOREIGN KEY (portfolio_id) REFERENCES shadow_portfolios(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_shadow_pos_status ON shadow_positions(status);
+    CREATE INDEX IF NOT EXISTS idx_shadow_pos_portfolio ON shadow_positions(portfolio_id);
   `);
 
     // Seed built-in strategies on first boot
