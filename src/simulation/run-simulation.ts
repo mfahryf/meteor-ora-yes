@@ -44,8 +44,8 @@ async function main() {
         const db = getDb();
         db.prepare("DELETE FROM shadow_positions").run();
         db.prepare("DELETE FROM shadow_portfolios").run();
-        // Reset sqlite autoincrement sequences
-        db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('shadow_positions', 'shadow_portfolios')").run();
+        // Reset sqlite autoincrement sequences (may not exist on fresh DB)
+        try { db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('shadow_positions', 'shadow_portfolios')").run(); } catch {}
         console.log(`✅ Reset complete! Starting fresh simulation.\n`);
     }
 
