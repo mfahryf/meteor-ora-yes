@@ -126,7 +126,7 @@ async function main() {
                     const valueSol = (p.entry_amount_sol + p.unrealized_pnl_sol).toFixed(4);
                     const debateStr = p.debate_arbiter_score ? `🤖 Arb: ${p.debate_arbiter_score}/100` : "🤖 No Debate";
 
-                    console.log(`  [${bar}] ${msg.padEnd(7)} | ${(p.token_a_symbol + "/" + p.token_b_symbol).padEnd(10)} | 📍 STAY | Age: ${ageStr.padEnd(4)} | Val: ${valueSol} SOL | PnL: ${pnlStr.padStart(7)} | ${debateStr}`);
+                    console.log(`  [${bar}] ${msg.padEnd(7)} | ${(p.token_a_symbol + "/" + p.token_b_symbol).padEnd(10)} | Age: ${ageStr.padEnd(4)} | PnL: ${pnlStr.padStart(7)} | Fees: ${unclaimedStr} | Val: ${valueSol} SOL | ${debateStr}`);
                     
                     totalFees += p.accumulated_fees_sol;
                     totalDeployed += (p.entry_amount_sol + p.unrealized_pnl_sol);
