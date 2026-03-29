@@ -125,13 +125,17 @@ export async function runBullBearDebate(
         token: `${candidate.tokenASymbol}/${candidate.tokenBSymbol}`,
     }, "Starting Bull/Bear debate");
 
+    // Debug: show which LLM config the debate is actually using
+    const maskedKey = config.llm.apiKey ? `${config.llm.apiKey.substring(0, 10)}...${config.llm.apiKey.slice(-4)}` : "EMPTY";
+    console.log(`  🔧 Debate LLM: ${config.llm.baseUrl} | model: ${config.llm.screeningModel} | key: ${maskedKey}`);
+
     // Step 1: Bull makes the case FOR
     let bullResult: any;
     try {
         const bullRaw = await llmCall(BULL_PROMPT, dataSummary, config);
         bullResult = safeParseJSON(bullRaw, { score: 50, reasoning: "Unable to analyze", key_factors: [] });
     } catch (error) {
-        logger.warn({ error: String(error) }, "Bull LLM call failed");
+        console.error("❌ Bull LLM ERROR:", String(error));
         bullResult = { score: 50, reasoning: "Bull analysis unavailable", key_factors: [] };
     }
 
@@ -141,7 +145,7 @@ export async function runBullBearDebate(
         const bearRaw = await llmCall(BEAR_PROMPT, dataSummary, config);
         bearResult = safeParseJSON(bearRaw, { score: 50, reasoning: "Unable to analyze", red_flags: [] });
     } catch (error) {
-        logger.warn({ error: String(error) }, "Bear LLM call failed");
+        console.error("❌ Bear LLM ERROR:", String(error));
         bearResult = { score: 50, reasoning: "Bear analysis unavailable", red_flags: [] };
     }
 
@@ -167,7 +171,7 @@ export async function runBullBearDebate(
         const arbiterRaw = await llmCall(ARBITER_PROMPT, arbiterInput, config);
         arbiterResult = safeParseJSON(arbiterRaw, { score: 50, recommendation: "skip", reasoning: "Unable to decide" });
     } catch (error) {
-        logger.warn({ error: String(error) }, "Arbiter LLM call failed");
+        console.error("❌ Arbiter LLM ERROR:", String(error));
         arbiterResult = { score: 40, recommendation: "skip", reasoning: "Arbiter unavailable — defaulting to skip for safety" };
     }
 
