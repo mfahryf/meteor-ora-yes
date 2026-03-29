@@ -107,7 +107,7 @@ async function main() {
                         msg = pc > 0 ? "UPR EDG" : "LWR EDG";
                     }
 
-                    console.log(`  [${bar}] ${msg.padEnd(7)} | ${(p.token_a_symbol + "/" + p.token_b_symbol).padEnd(10)} | Age: ${ageStr.padEnd(4)} | PnL: ${pnlStr.padStart(7)} | Fees: ${unclaimedStr}`);
+                    console.log(`  [${bar}] ${msg.padEnd(7)} | ${(p.token_a_symbol + "/" + p.token_b_symbol).padEnd(10)} | 📍 STAY | Age: ${ageStr.padEnd(4)} | PnL: ${pnlStr.padStart(7)} | Fees: ${unclaimedStr}`);
                     
                     totalFees += p.accumulated_fees_sol;
                     totalDeployed += (p.entry_amount_sol + p.unrealized_pnl_sol);
