@@ -45,6 +45,8 @@ function resolveEnvVars(config: Config): Config {
       authorizedIds.push(telegramChatId);
   }
 
+  const envModel = process.env.LLM_MODEL;
+
   return {
     ...config,
     credentials: {
@@ -61,7 +63,11 @@ function resolveEnvVars(config: Config): Config {
       ...config.llm,
       baseUrl: process.env.LLM_BASE_URL || config.llm?.baseUrl,
       apiKey: process.env.LLM_API_KEY || config.llm?.apiKey,
-      model: process.env.LLM_MODEL || config.llm?.model,
+      model: envModel || config.llm?.model,
+      screeningModel: envModel || config.llm?.screeningModel,
+      managementModel: envModel || config.llm?.managementModel,
+      generalModel: envModel || config.llm?.generalModel,
+      chatModel: envModel || config.llm?.chatModel,
     },
   };
 }
