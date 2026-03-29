@@ -41,17 +41,17 @@ async function llmCall(
         body: JSON.stringify({
             model,
             messages: [
-                { role: "system", content: systemPrompt },
+                { role: "system", content: systemPrompt + "\n\nIMPORTANT: Respond ONLY with a JSON object, no markdown, no explanation." },
                 { role: "user", content: userMessage },
             ],
             temperature: config.llm.temperature || 0.3,
             max_tokens: 500,
-            response_format: { type: "json_object" },
         }),
     });
 
     if (!response.ok) {
-        throw new Error(`LLM call failed: ${response.status} ${response.statusText}`);
+        const errorBody = await response.text().catch(() => "");
+        throw new Error(`LLM call failed: ${response.status} ${response.statusText} — ${errorBody.substring(0, 200)}`);
     }
 
     const json = await response.json() as any;
