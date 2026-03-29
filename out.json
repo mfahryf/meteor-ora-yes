@@ -1,0 +1,13 @@
+{
+  "url": "https://openrouter.ai/api/v1/chat/completions",
+  "headers": {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer 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",
+    "HTTP-Referer": "https://meteor-ora-yes.com",
+    "X-Title": "MeteorOraYes Simulator"
+  },
+  "bodyModelHex": "676f6f676c652f67656d6d612d332d3237622d69743a66726565",
+  "authHex": "42656172657220736b2d6f722d76312d30303236386163653637343365313965376264373265616463653965393831366132323561613761316639353034393238396436653464636135323961373964",
+  "status": 401,
+  "response": "{\"error\":{\"message\":\"User not found.\",\"code\":401}}"
+}

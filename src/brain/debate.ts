@@ -26,36 +26,56 @@ export interface DebateResult {
 
 // ─── LLM Call Helper ───────────────────────────────────────────────
 
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 async function llmCall(
     systemPrompt: string,
     userMessage: string,
     config: Config,
 ): Promise<string> {
     const model = config.llm.screeningModel || config.llm.model;
-    const response = await fetch(`${config.llm.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${config.llm.apiKey}`,
-        },
-        body: JSON.stringify({
-            model,
-            messages: [
-                { role: "system", content: systemPrompt + "\n\nIMPORTANT: Respond ONLY with a JSON object, no markdown, no explanation." },
-                { role: "user", content: userMessage },
-            ],
-            temperature: config.llm.temperature || 0.3,
-            max_tokens: 500,
-        }),
-    });
+    const url = `${config.llm.baseUrl}/chat/completions`;
+    const headers = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${config.llm.apiKey}`,
+        "HTTP-Referer": "https://meteor-ora-yes.com",
+        "X-Title": "MeteorOraYes Simulator",
+    };
+    const bodyObj = {
+        model,
+        messages: [
+            { role: "system", content: systemPrompt + "\n\nIMPORTANT: Respond ONLY with a JSON object, no markdown, no explanation." },
+            { role: "user", content: userMessage },
+        ],
+        temperature: config.llm.temperature || 0.3,
+        max_tokens: 500,
+    };
 
-    if (!response.ok) {
-        const errorBody = await response.text().catch(() => "");
-        throw new Error(`LLM call failed: ${response.status} ${response.statusText} — ${errorBody.substring(0, 200)}`);
+    const maxRetries = 3;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        const response = await fetch(url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(bodyObj),
+        });
+
+        if (response.status === 429) {
+            const waitSec = (attempt + 1) * 5; // 5s, 10s, 15s
+            console.log(`  ⏳ Rate limited (429), retrying in ${waitSec}s... (attempt ${attempt + 1}/${maxRetries})`);
+            await sleep(waitSec * 1000);
+            continue;
+        }
+
+        if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            throw new Error(`LLM call failed: ${response.status} ${response.statusText} — ${errorBody.substring(0, 200)}`);
+        }
+
+        const json = await response.json() as any;
+        return json.choices?.[0]?.message?.content || "{}";
     }
 
-    const json = await response.json() as any;
-    return json.choices?.[0]?.message?.content || "{}";
+    throw new Error("LLM call failed: exceeded max retries due to rate limiting (429)");
 }
 
 // ─── Build Data Summary for Debate ─────────────────────────────────
@@ -125,10 +145,6 @@ export async function runBullBearDebate(
         token: `${candidate.tokenASymbol}/${candidate.tokenBSymbol}`,
     }, "Starting Bull/Bear debate");
 
-    // Debug: show which LLM config the debate is actually using
-    const maskedKey = config.llm.apiKey ? `${config.llm.apiKey.substring(0, 10)}...${config.llm.apiKey.slice(-4)}` : "EMPTY";
-    console.log(`  🔧 Debate LLM: ${config.llm.baseUrl} | model: ${config.llm.screeningModel} | key: ${maskedKey}`);
-
     // Step 1: Bull makes the case FOR
     let bullResult: any;
     try {
@@ -139,6 +155,8 @@ export async function runBullBearDebate(
         bullResult = { score: 50, reasoning: "Bull analysis unavailable", key_factors: [] };
     }
 
+    await sleep(3000); // Rate limit cooldown
+
     // Step 2: Bear makes the case AGAINST
     let bearResult: any;
     try {
@@ -148,6 +166,8 @@ export async function runBullBearDebate(
         console.error("❌ Bear LLM ERROR:", String(error));
         bearResult = { score: 50, reasoning: "Bear analysis unavailable", red_flags: [] };
     }
+
+    await sleep(3000); // Rate limit cooldown
 
     // Step 3: Arbiter weighs both sides
     const arbiterInput = [
