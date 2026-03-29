@@ -61,6 +61,18 @@ async function main() {
             console.log(`  Screened: ${result.screened} pools | Deployed: ${result.deployed} | Monitored: ${result.monitored} | Closed: ${result.closed}`);
             console.log(`  Balance: ${result.portfolioBalance.toFixed(4)} SOL (${result.portfolioPnlPct >= 0 ? "+" : ""}${result.portfolioPnlPct.toFixed(1)}%)`);
 
+            // --- Tampilkan Kondisi Pool (Top Candidates) ---
+            if (result.topCandidates && result.topCandidates.length > 0) {
+                console.log(`\n  🌟 Top 5 Pool Ditemukan (Screening):`);
+                result.topCandidates.forEach((c, i) => {
+                    const age = c.dexScreener?.pairAgeHours ? `${c.dexScreener?.pairAgeHours.toFixed(1)}h` : "?";
+                    const bsRatio = c.dexScreener?.buySellRatio24h ? c.dexScreener?.buySellRatio24h.toFixed(1) : "?";
+                    const pc = c.dexScreener?.priceChange1h ? `${c.dexScreener.priceChange1h >= 0 ? '+' : ''}${c.dexScreener.priceChange1h.toFixed(1)}%` : "?";
+                    
+                    console.log(`    ${i + 1}. ${c.tokenASymbol}/${c.tokenBSymbol} | TVL: $${c.tvl.toFixed(0)} | Umur: ${age} | B/S: ${bsRatio} | 1h: ${pc}`);
+                });
+            }
+
             if (result.errors.length > 0) {
                 console.log(`  ⚠️ Errors: ${result.errors.length}`);
                 result.errors.forEach(e => console.log(`    - ${e}`));

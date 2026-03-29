@@ -24,6 +24,7 @@ import { logger } from "../utils/logger";
 export interface SimulationResult {
     cycle: number;
     screened: number;
+    topCandidates: any[];
     preScreenPassed: number;
     debated: number;
     deployed: number; // shadow deployments
@@ -49,6 +50,7 @@ export async function runSimulationCycle(
     const result: SimulationResult = {
         cycle: cycleNumber,
         screened: 0,
+        topCandidates: [],
         preScreenPassed: 0,
         debated: 0,
         deployed: 0,
@@ -73,6 +75,7 @@ export async function runSimulationCycle(
         candidates = await getTopCandidates(config);
         result.screened = candidates.length;
         result.preScreenPassed = candidates.length; // already pre-screened
+        result.topCandidates = candidates.slice(0, 5);
     } catch (error) {
         result.errors.push(`Screening failed: ${error}`);
         logger.error({ error: String(error) }, "Simulation screening failed");
