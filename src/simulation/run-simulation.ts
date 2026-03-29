@@ -21,6 +21,7 @@ async function main() {
     const initialBalance = parseFloat(getArg("balance", "1.0"));
 
     const isInfinite = totalCycles === 0;
+    const isReset = args.includes("--reset");
     const cycleDisplay = isInfinite ? "∞" : String(totalCycles).padEnd(4);
 
     console.log(`
@@ -36,6 +37,17 @@ async function main() {
     // Init
     const config = loadConfig();
     initDb();
+
+    if (isReset) {
+        console.log(`🧹 Resetting all shadow positions and portfolios...`);
+        const { getDb } = await import("../memory/sqlite");
+        const db = getDb();
+        db.prepare("DELETE FROM shadow_positions").run();
+        db.prepare("DELETE FROM shadow_portfolios").run();
+        // Reset sqlite autoincrement sequences
+        db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('shadow_positions', 'shadow_portfolios')").run();
+        console.log(`✅ Reset complete! Starting fresh simulation.\n`);
+    }
 
     // Create or get portfolio
     let portfolio = getDefaultPortfolio();
