@@ -41,6 +41,18 @@ export async function sendMessage(chatId: string, text: string, parseMode = "Mar
     }
 }
 
+export async function broadcastMessage(text: string, parseMode = "Markdown"): Promise<void> {
+    if (!currentConfig) return;
+    
+    const authorizedIds = currentConfig.telegram.authorizedChatIds || [];
+    const targets = new Set<string>(authorizedIds);
+    if (autoRegisteredChatId) targets.add(autoRegisteredChatId);
+
+    for (const chatId of targets) {
+        await sendMessage(chatId, text, parseMode);
+    }
+}
+
 async function sendChatAction(chatId: string, action = "typing"): Promise<void> {
     if (!botToken) return;
     const url = `https://api.telegram.org/bot${botToken}/sendChatAction`;

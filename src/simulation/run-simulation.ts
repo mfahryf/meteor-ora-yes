@@ -49,6 +49,11 @@ async function main() {
     console.log(`📈 Open positions: ${portfolio.positions_opened - portfolio.positions_closed}`);
     console.log(`\n--- Starting simulation (Press Ctrl+C to stop) ---\n`);
 
+    // Start telegram bot for simulation
+    const { startBot, broadcastMessage } = await import("../telegram/bot");
+    await startBot(config);
+    console.log(`🤖 Telegram bot started! Send any message to your bot to auto-register and receive live updates.`);
+
     // Run cycles
     let cycle = 1;
     while (isInfinite || cycle <= totalCycles) {
@@ -76,6 +81,17 @@ async function main() {
             if (result.errors.length > 0) {
                 console.log(`  ⚠️ Errors: ${result.errors.length}`);
                 result.errors.forEach(e => console.log(`    - ${e}`));
+            }
+
+            let tgMessage = `🔄 *Simulation Cycle ${cycle}*\n\n`;
+            tgMessage += `Screened: ${result.screened} pools | Deployed: ${result.deployed}\n`;
+            tgMessage += `Balance: *${result.portfolioBalance.toFixed(4)} SOL* (${result.portfolioPnlPct >= 0 ? "+" : ""}${result.portfolioPnlPct.toFixed(1)}%)\n`;
+
+            if (result.topCandidates && result.topCandidates.length > 0) {
+                tgMessage += `\n🌟 *Top 3 Screens:*\n`;
+                result.topCandidates.slice(0, 3).forEach((c, i) => {
+                    tgMessage += `  ${i + 1}. ${c.tokenASymbol}/${c.tokenBSymbol} | $${c.tvl.toFixed(0)}\n`;
+                });
             }
 
             // --- Tampilkan Status Posisi Aktif ---
@@ -111,11 +127,18 @@ async function main() {
                     
                     totalFees += p.accumulated_fees_sol;
                     totalDeployed += (p.entry_amount_sol + p.unrealized_pnl_sol);
+
+                    // Add to telegram broadcast
+                    tgMessage += `\n[${bar}] ${msg}\n${p.token_a_symbol}/${p.token_b_symbol} | Age: ${ageStr}\nPnL: ${pnlStr} | Fees: ${unclaimedStr}\n`;
                 });
                 console.log(`\n  💼 ${openPos.length} pos | Total: ${totalDeployed.toFixed(4)} SOL | Total Fees: ${totalFees.toFixed(4)} SOL`);
+                tgMessage += `\n💼 ${openPos.length} pos | Total: ${totalDeployed.toFixed(4)} SOL`;
             } else {
                 console.log(`\n  📭 Tidak ada posisi yang aktif saat ini.`);
             }
+
+            // Send to telegram (silently)
+            broadcastMessage(tgMessage).catch(() => {});
 
         } catch (error) {
             console.error(`  ❌ Cycle failed: ${error}`);
