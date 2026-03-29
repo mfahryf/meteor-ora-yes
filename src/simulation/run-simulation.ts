@@ -82,13 +82,38 @@ async function main() {
             const { getOpenShadowPositions } = await import("./shadow-portfolio");
             const openPos = getOpenShadowPositions(portfolio.id);
             if (openPos.length > 0) {
-                console.log(`\n  📡 Status Posisi Aktif (${openPos.length}/${config.risk.maxPositions}):`);
-                openPos.forEach((p, i) => {
-                    const sign = p.unrealized_pnl_pct >= 0 ? "+" : "";
-                    const feeStr = p.accumulated_fees_sol > 0 ? ` | Fees: +${p.accumulated_fees_sol.toFixed(4)}` : "";
-                    console.log(`    ${i + 1}. ${p.token_a_symbol}/${p.token_b_symbol}  [${p.duration_minutes.toFixed(0)} menit]`);
-                    console.log(`       PnL: ${sign}${p.unrealized_pnl_pct.toFixed(2)}% (${sign}${p.unrealized_pnl_sol.toFixed(4)} SOL)${feeStr}`);
+                let totalFees = 0;
+                let totalDeployed = 0;
+
+                console.log(`\n  📡 LLM Manager Evaluation (Simulated):`);
+                openPos.forEach((p) => {
+                    const ageStr = `${p.duration_minutes.toFixed(0)}m`;
+                    const unclaimedStr = `${p.accumulated_fees_sol.toFixed(4)} SOL`;
+                    const pnlStr = `${p.unrealized_pnl_pct >= 0 ? '+' : ''}${p.unrealized_pnl_pct.toFixed(2)}%`;
+                    
+                    // Calculate range bar
+                    const totalBins = Math.max(1, p.bins_below + p.bins_above);
+                    const binRangePct = (p.bin_step * totalBins / 10000) * 100; // estimate max price range before OOR
+                    const pc = p.price_change_pct;
+                    
+                    let bar = "████████████████████";
+                    let msg = "in range";
+                    
+                    if (Math.abs(pc) > binRangePct) {
+                        bar = "░░░░░░░░░░░░░░░░░░░░";
+                        msg = "out of range";
+                    } else if (Math.abs(pc) > binRangePct * 0.8) {
+                        bar = pc > 0 ? "████████████████░░░░" : "░░░░████████████████";
+                        msg = pc > 0 ? "at upper edge" : "at lower edge";
+                    }
+
+                    console.log(`**${p.token_a_symbol}-${p.token_b_symbol}** | Age: ${ageStr} | Unclaimed: ${unclaimedStr} | PnL: ${pnlStr} | STAY`);
+                    console.log(`Range: [${bar}] (20 chars: ${msg})\n`);
+                    
+                    totalFees += p.accumulated_fees_sol;
+                    totalDeployed += (p.entry_amount_sol + p.unrealized_pnl_sol);
                 });
+                console.log(`💼 ${openPos.length} positions | ${totalDeployed.toFixed(4)} SOL | fees today: ${totalFees.toFixed(4)} SOL | Holding active positions in simulator.`);
             } else {
                 console.log(`\n  📭 Tidak ada posisi yang aktif saat ini.`);
             }
