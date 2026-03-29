@@ -91,29 +91,28 @@ async function main() {
                     const unclaimedStr = `${p.accumulated_fees_sol.toFixed(4)} SOL`;
                     const pnlStr = `${p.unrealized_pnl_pct >= 0 ? '+' : ''}${p.unrealized_pnl_pct.toFixed(2)}%`;
                     
-                    // Calculate range bar
+                    // Calculate 10-char compact range bar
                     const totalBins = Math.max(1, p.bins_below + p.bins_above);
-                    const binRangePct = (p.bin_step * totalBins / 10000) * 100; // estimate max price range before OOR
+                    const binRangePct = (p.bin_step * totalBins / 10000) * 100;
                     const pc = p.price_change_pct;
                     
-                    let bar = "████████████████████";
-                    let msg = "in range";
+                    let bar = "██████████";
+                    let msg = "IN RNG";
                     
                     if (Math.abs(pc) > binRangePct) {
-                        bar = "░░░░░░░░░░░░░░░░░░░░";
-                        msg = "out of range";
+                        bar = "░░░░░░░░░░";
+                        msg = "OUT RNG";
                     } else if (Math.abs(pc) > binRangePct * 0.8) {
-                        bar = pc > 0 ? "████████████████░░░░" : "░░░░████████████████";
-                        msg = pc > 0 ? "at upper edge" : "at lower edge";
+                        bar = pc > 0 ? "████████░░" : "░░████████";
+                        msg = pc > 0 ? "UPR EDG" : "LWR EDG";
                     }
 
-                    console.log(`**${p.token_a_symbol}-${p.token_b_symbol}** | Age: ${ageStr} | Unclaimed: ${unclaimedStr} | PnL: ${pnlStr} | STAY`);
-                    console.log(`Range: [${bar}] (20 chars: ${msg})\n`);
+                    console.log(`  [${bar}] ${msg.padEnd(7)} | ${(p.token_a_symbol + "/" + p.token_b_symbol).padEnd(10)} | Age: ${ageStr.padEnd(4)} | PnL: ${pnlStr.padStart(7)} | Fees: ${unclaimedStr}`);
                     
                     totalFees += p.accumulated_fees_sol;
                     totalDeployed += (p.entry_amount_sol + p.unrealized_pnl_sol);
                 });
-                console.log(`💼 ${openPos.length} positions | ${totalDeployed.toFixed(4)} SOL | fees today: ${totalFees.toFixed(4)} SOL | Holding active positions in simulator.`);
+                console.log(`\n  💼 ${openPos.length} pos | Total: ${totalDeployed.toFixed(4)} SOL | Total Fees: ${totalFees.toFixed(4)} SOL`);
             } else {
                 console.log(`\n  📭 Tidak ada posisi yang aktif saat ini.`);
             }
