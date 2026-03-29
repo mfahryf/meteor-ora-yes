@@ -42,7 +42,7 @@ export const defaultConfig: Config = {
     maxBundlersPct: 20,
     maxTop10Pct: 50,
     blockedLaunchpads: [],
-    useDebate: false,
+    useDebate: true,
     debateScoreThreshold: 60,
   },
   dexScreener: {
