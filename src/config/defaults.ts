@@ -42,6 +42,21 @@ export const defaultConfig: Config = {
     maxBundlersPct: 20,
     maxTop10Pct: 50,
     blockedLaunchpads: [],
+    useDebate: false,
+    debateScoreThreshold: 60,
+  },
+  dexScreener: {
+    enabled: true,
+    preScreen: {
+      minLiquidityUsd: 5000,
+      maxPriceChange24hPct: 80,
+      minPriceChange24hPct: -50,
+      minTxns24h: 100,
+      minBuySellRatio: 0.3,
+      maxBuySellRatio: 3.0,
+      minPairAgeHours: 6,
+      boostBonusScore: 10,
+    },
   },
   management: {
     strategy: "bid_ask",

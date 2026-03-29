@@ -11,7 +11,8 @@ export type ToolCategory =
     | "strategy"
     | "blacklist"
     | "self_mgmt"
-    | "lper";
+    | "lper"
+    | "dex_screener";
 
 export interface ToolDef {
     type: "function";
@@ -335,10 +336,24 @@ const listBlacklist = tool("list_blacklist",
 
 // --- Self-Management ---
 const updateConfig = tool("update_config",
-    "Update a runtime configuration value.",
-    { key: { type: "string", description: "Config key path (dot notation)" }, value: { type: "string", description: "New value as string" }, reason: { type: "string", description: "Reason for the change" } },
+    "Update a runtime configuration value. Protected by 5-layer guardrails: hard bounds, max 20% step, 1h cooldown, data-backed reasoning required, audit trail. Provide a detailed reason with numbers.",
+    { key: { type: "string", description: "Config key path (dot notation)" }, value: { type: "string", description: "New value as string" }, reason: { type: "string", description: "Data-backed reason with numbers (e.g., 'pools under $15K had 3x rug rate over 14 trades')" } },
     ["key", "value", "reason"],
-    { category: "self_mgmt", write: true, roles: ["SCREENER", "MANAGER", "EVOLVER", "CHAT"] }
+    { category: "self_mgmt", write: true, roles: ["EVOLVER", "CHAT"] }
+);
+
+const getComputedMetrics = tool("get_computed_metrics",
+    "Get computed performance metrics: win rate, avg PnL, Sharpe ratio, drawdown, per-strategy analysis, pool profile analysis, exit reason analysis. Always call this BEFORE making config proposals.",
+    { days: { type: "number", description: "Lookback period in days (default 30)" } },
+    [],
+    { category: "self_mgmt", write: false, roles: ["EVOLVER", "CHAT"] }
+);
+
+const getConfigHistory = tool("get_config_history",
+    "Get recent config changes audit trail — see what was changed, by whom, and whether guards approved or rejected.",
+    { limit: { type: "number", description: "Number of entries (default 20)" } },
+    [],
+    { category: "self_mgmt", write: false, roles: ["EVOLVER", "CHAT"] }
 );
 
 // --- Top LPers ---
@@ -354,6 +369,33 @@ const studyTopLpers = tool("study_top_lpers",
     { pool_address: { type: "string", description: "Pool address" } },
     ["pool_address"],
     { category: "lper", write: false, roles: ["SCREENER", "CHAT"] }
+);
+
+// --- DexScreener ---
+const dexScreenerTokenPairs = tool("dex_screener_token_pairs",
+    "Get DexScreener market data for a token: price change (5m/1h/6h/24h), buy/sell txns, liquidity, FDV, market cap, pair age, boost status. No API key needed.",
+    {
+        token_address: { type: "string", description: "Token mint address" },
+        chain: { type: "string", description: "Chain (default: solana)" },
+    },
+    ["token_address"],
+    { category: "dex_screener", write: false, roles: ["SCREENER", "CHAT"] }
+);
+
+const dexScreenerBoostedTokens = tool("dex_screener_boosted_tokens",
+    "Get list of currently boosted tokens on DexScreener. Boosted tokens have paid for visibility — social signal.",
+    {},
+    [],
+    { category: "dex_screener", write: false, roles: ["SCREENER", "CHAT"] }
+);
+
+const preScreenToken = tool("pre_screen_token",
+    "Run DexScreener pre-screening on a token: checks liquidity, price change, txn count, buy/sell ratio, pair age. Returns pass/fail with enriched market data.",
+    {
+        token_address: { type: "string", description: "Token mint address" },
+    },
+    ["token_address"],
+    { category: "dex_screener", write: false, roles: ["SCREENER", "CHAT"] }
 );
 
 // --- Strategy Compute ---
@@ -400,9 +442,11 @@ export const ALL_TOOLS: ToolDef[] = [
     // Blacklist
     addToBlacklist, removeFromBlacklist, listBlacklist,
     // Self-management
-    updateConfig,
+    updateConfig, getComputedMetrics, getConfigHistory,
     // LPers
     getTopLpers, studyTopLpers,
+    // DexScreener
+    dexScreenerTokenPairs, dexScreenerBoostedTokens, preScreenToken,
 ];
 
 export function getToolsForRole(role: string): ToolDef[] {

@@ -115,6 +115,42 @@ export function initDb(path: string = "data/dlmm.db"): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_pool_notes_pool ON pool_notes(pool_address);
     CREATE INDEX IF NOT EXISTS idx_blacklist_mint ON blacklist(token_mint);
+    CREATE TABLE IF NOT EXISTS position_outcomes (
+        id INTEGER PRIMARY KEY,
+        position_pubkey TEXT,
+        pool_address TEXT,
+        strategy_type TEXT,
+        token_symbol TEXT,
+        entry_amount_sol REAL,
+        entry_timestamp DATETIME,
+        exit_amount_sol REAL,
+        exit_timestamp DATETIME,
+        fees_earned_sol REAL DEFAULT 0,
+        pnl_sol REAL,
+        pnl_pct REAL,
+        duration_minutes REAL,
+        exit_reason TEXT,
+        pool_tvl_at_entry REAL,
+        pool_volume_at_entry REAL,
+        pool_age_hours_at_entry REAL,
+        price_change_1h_at_entry REAL,
+        bin_step INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_outcomes_strategy ON position_outcomes(strategy_type);
+    CREATE INDEX IF NOT EXISTS idx_outcomes_exit_ts ON position_outcomes(exit_timestamp);
+    CREATE TABLE IF NOT EXISTS config_change_log (
+        id INTEGER PRIMARY KEY,
+        key TEXT,
+        old_value TEXT,
+        new_value TEXT,
+        reason TEXT,
+        proposed_by TEXT,
+        guard_checks TEXT,
+        applied BOOLEAN,
+        rejection_reason TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_config_log_key ON config_change_log(key);
   `);
 
     // Seed built-in strategies on first boot

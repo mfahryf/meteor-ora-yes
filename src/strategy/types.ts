@@ -65,6 +65,24 @@ export interface PoolCandidate {
     netBuyers: number;
     poolAgeDays: number;
     score: number;
+
+    // DexScreener-enriched fields (optional, populated by pre-screen)
+    dexScreener?: {
+        priceChange5m: number;
+        priceChange1h: number;
+        priceChange6h: number;
+        priceChange24h: number;
+        buys24h: number;
+        sells24h: number;
+        buySellRatio24h: number;
+        liquidityUsd: number;
+        fdv: number;
+        marketCap: number;
+        pairAgeHours: number;
+        isBoosted: boolean;
+        boostAmount: number;
+        preScreenScore: number;
+    };
 }
 
 export interface DeployParams {

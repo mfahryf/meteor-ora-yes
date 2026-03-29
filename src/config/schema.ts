@@ -46,6 +46,21 @@ export const ConfigSchema = z.object({
     maxBundlersPct: z.number().min(0).max(100),
     maxTop10Pct: z.number().min(0).max(100),
     blockedLaunchpads: z.array(z.string()),
+    useDebate: z.boolean().optional(),
+    debateScoreThreshold: z.number().min(0).max(100).optional(),
+  }),
+  dexScreener: z.object({
+    enabled: z.boolean(),
+    preScreen: z.object({
+      minLiquidityUsd: z.number().nonnegative(),
+      maxPriceChange24hPct: z.number(),
+      minPriceChange24hPct: z.number(),
+      minTxns24h: z.number().int().nonnegative(),
+      minBuySellRatio: z.number().nonnegative(),
+      maxBuySellRatio: z.number().positive(),
+      minPairAgeHours: z.number().nonnegative(),
+      boostBonusScore: z.number().nonnegative(),
+    }),
   }),
   management: z.object({
     strategy: z.enum(['spot', 'curve', 'bid_ask', 'single_sided_reseed', 'fee_compounding', 'partial_harvest']),

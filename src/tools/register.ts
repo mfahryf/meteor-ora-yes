@@ -221,9 +221,14 @@ export function registerAllTools(config: Config, connection: Connection, wallet:
     // Memory & Learning
     registerTool("add_lesson", async (args: any) => {
         const { v4: uuidv4 } = await import("uuid");
-        // Qdrant strictly expects a 1536-dimensional vector for our collections
-        const dummyVector = new Array(1536).fill(0);
-        await addLesson({ id: uuidv4(), text: args.text, role: args.role, pinned: false, tags: args.tags || [], createdAt: new Date().toISOString() }, dummyVector);
+        const { getEmbedding } = await import("../brain/embeddings");
+        // Generate real embedding (or hash-based fallback) instead of dummy zeros
+        const vector = await getEmbedding(
+            args.text,
+            config.llm.baseUrl,
+            config.llm.apiKey,
+        );
+        await addLesson({ id: uuidv4(), text: args.text, role: args.role, pinned: false, tags: args.tags || [], createdAt: new Date().toISOString() }, vector);
         return { saved: true };
     });
     registerTool("list_lessons", async (args: any) => listLessons(args.role, args.pinned_only, args.limit));
@@ -326,10 +331,58 @@ export function registerAllTools(config: Config, connection: Connection, wallet:
         return result;
     });
 
-    // Self-management
+    // Self-management — with 5-layer guardrails
     registerTool("update_config", async (args: any) => {
-        logger.info({ key: args.key, value: args.value, reason: args.reason }, "Config update requested");
-        return { updated: true, key: args.key };
+        const { applyGuardedConfigChange } = await import("../core/config-guard");
+        const result = applyGuardedConfigChange({
+            key: args.key,
+            newValue: args.value,
+            reason: args.reason,
+            proposedBy: args.role || "EVOLVER",
+        });
+
+        if (result.applied) {
+            logger.info({
+                key: result.key,
+                oldValue: result.oldValue,
+                newValue: result.newValue,
+                reason: result.reason,
+            }, "Config change applied via guardrails");
+        } else {
+            logger.warn({
+                key: result.key,
+                rejection: result.rejectionReason,
+            }, "Config change rejected by guardrails");
+        }
+
+        return result;
+    });
+
+    // Computed Metrics — for EVOLVER data-driven analysis
+    registerTool("get_computed_metrics", async (args: any) => {
+        const { getAllComputedMetrics } = await import("../memory/metrics");
+        return getAllComputedMetrics(args.days || 30);
+    });
+
+    // Config Change Audit Trail
+    registerTool("get_config_history", async (args: any) => {
+        const { getRecentConfigChanges } = await import("../core/config-guard");
+        return getRecentConfigChanges(args.limit || 20);
+    });
+
+    // DexScreener
+    registerTool("dex_screener_token_pairs", async (args: any) => {
+        const { getTokenPairs, extractMarketData } = await import("../chain/dexscreener");
+        const pairs = await getTokenPairs(args.token_address, args.chain || "solana");
+        return pairs.map(p => extractMarketData(p));
+    });
+    registerTool("dex_screener_boosted_tokens", async () => {
+        const { getBoostedTokens } = await import("../chain/dexscreener");
+        return getBoostedTokens();
+    });
+    registerTool("pre_screen_token", async (args: any) => {
+        const { preScreenToken } = await import("../strategy/pre-screen");
+        return preScreenToken(args.token_address, config.dexScreener.preScreen);
     });
 
     logger.info("All tools registered");
