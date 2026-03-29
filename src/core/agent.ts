@@ -21,6 +21,7 @@ export interface AgentDependencies {
     walletSolBalance: number;
     walletTokenBalances: Record<string, number>;
     lessonVector?: number[];
+    preloadedData?: string;
 }
 
 export async function agentLoop(
@@ -40,7 +41,8 @@ export async function agentLoop(
         role,
         deps.walletSolBalance,
         deps.walletTokenBalances,
-        deps.lessonVector
+        deps.lessonVector,
+        deps.preloadedData
     );
 
     // 2. Build system prompt + tool schemas

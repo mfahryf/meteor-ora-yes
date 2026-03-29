@@ -65,6 +65,14 @@ Recent Activity: ${JSON.stringify(context.recentActivity, null, 2)}
         prompt += `${JSON.stringify(context.activeStrategy, null, 2)}\n\n`;
     }
 
+    // ── PRELOADED DATA ──
+    if (context.preloadedData) {
+        prompt += `═══════════════════════════════════════════
+ PRELOADED DATA
+═══════════════════════════════════════════\n\n`;
+        prompt += `${context.preloadedData}\n\n`;
+    }
+
     // ── BEHAVIORAL CORE ──
     prompt += `═══════════════════════════════════════════
  BEHAVIORAL CORE

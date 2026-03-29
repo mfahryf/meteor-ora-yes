@@ -9,9 +9,10 @@ IMPORTANT: Pools are now PRE-SCREENED by DexScreener before you see them. This m
 - Pool age and net buyers are computed from REAL market data (no longer hardcoded to 0)
 
 1. STRATEGY: Call list_strategies then get_strategy for the active one. The active strategy guides your deploy parameters.
-2. SCREEN: Use get_top_candidates or discover_pools.
+2. SCREEN: Review the PRELOADED DATA section above for the top 5 candidates.
    - Candidates are already pre-screened by DexScreener (dangerous tokens filtered out)
-   - Each candidate includes dexScreener enrichment: priceChange, buySellRatio, pairAge, boost status
+   - Each candidate includes dexScreener enrichment: priceChange, buySellRatio, pairAge
+   - If no preloaded candidates match your criteria, you may call get_top_candidates or discover_pools for more.
 3. STUDY: Call study_top_lpers. Look for high win rates and sustainable volume.
 4. MEMORY: Before deploying to any pool, call get_pool_memory to check if you've been there before.
 5. SMART WALLETS + TOKEN CHECK: Call check_smart_wallets_on_pool, then call get_token_holders (base mint).

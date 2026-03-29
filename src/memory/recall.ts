@@ -43,13 +43,15 @@ export interface AgentContext {
         type: string;
         managementRules: Record<string, unknown>;
     };
+    preloadedData?: string;
 }
 
 export async function buildContext(
     role: string,
     walletSolBalance: number = 0,
     walletTokenBalances: Record<string, number> = {},
-    lessonVector?: number[]
+    lessonVector?: number[],
+    preloadedData?: string
 ): Promise<AgentContext> {
     // SQLite queries (synchronous with bun:sqlite)
     const openPositions = getOpenPositions();

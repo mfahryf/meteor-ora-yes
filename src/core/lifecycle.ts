@@ -218,7 +218,7 @@ async function runScreeningCycle(walletPubkey: string): Promise<void> {
     _screeningBusy = true;
     _screeningLastTriggered = Date.now();
     try {
-        const deps = await getWalletDeps(walletPubkey);
+        const deps: any = await getWalletDeps(walletPubkey);
 
         // Pre-check: enough SOL?
         const minRequired = config.management.deployAmountSol + config.management.gasReserve;
@@ -227,7 +227,34 @@ async function runScreeningCycle(walletPubkey: string): Promise<void> {
             return;
         }
 
-        await agentLoop("Find trending pools and deploy liquidity", "SCREENER" as Role, config, deps);
+        logger.info("Pre-fetching top candidates before invoking SCREENER...");
+        const { getTopCandidates } = await import("../strategy/screener");
+        const candidates = await getTopCandidates(config);
+        
+        if (candidates.length === 0) {
+            logger.info("No candidates found during pre-screening. Skipping agent loop.");
+            return;
+        }
+
+        // Take top 5 to save context window, format as JSON string
+        const top5 = candidates.slice(0, 5).map(c => ({
+            token: `${c.tokenASymbol}/${c.tokenBSymbol}`,
+            address: c.address,
+            tvl: c.tvl,
+            vol24h: c.volume24h,
+            volatility: c.volatility,
+            score: c.score,
+            dexScreener: c.dexScreener ? {
+                priceChange1h: c.dexScreener.priceChange1h,
+                buySellRatio: c.dexScreener.buySellRatio24h,
+                pairAge: c.dexScreener.pairAgeHours,
+            } : null
+        }));
+
+        deps.preloadedData = `Top ${top5.length} Pre-Screened Candidates:\n${JSON.stringify(top5, null, 2)}`;
+        
+        logger.info({ preloadedCount: top5.length }, "Starting SCREENER loop with pre-loaded candidates");
+        await agentLoop("Analyze the provided candidates and deploy capital to the best one.", "SCREENER" as Role, config, deps);
     } finally {
         _screeningBusy = false;
     }
